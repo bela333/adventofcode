@@ -35,23 +35,22 @@ def parse_expression(input: str) -> Tuple[List | int, str]:
     else:
         return parse_number(input)
 
+# True: left < right
+# False: left > right
+# None: left == right
 def check_correct(left, right) -> bool | None:
     if isinstance(left, int) and isinstance(right, int):
         if left == right:
             return None
         return left < right
     if isinstance(left, list) and isinstance(right, list):
-        if len(left) == 0 and len(right) == 0:
+        for (l, r) in zip(left, right):
+            v = check_correct(l, r)
+            if v is not None:
+                return v
+        if len(left) == len(right):
             return None
-        if len(left) == 0 and len(right) != 0:
-            return True
-        if len(right) == 0 and len(left) != 0:
-            return False
-        v = check_correct(left[0], right[0])
-        if v is None:
-            return check_correct(left[1:], right[1:])
-        else:
-            return v
+        return len(left) < len(right)
     if isinstance(left, int):
         return check_correct([left], right)
     if isinstance(right,int):
