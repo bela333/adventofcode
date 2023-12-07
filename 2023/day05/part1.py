@@ -1,12 +1,22 @@
-from typing import List
+from typing import Union, List
 
-seed_to_soil = {}
-soil_to_fertilizer = {}
-fertilizer_to_water = {}
-water_to_light = {}
-light_to_temperature = {}
-temperature_to_humidity = {}
-humidity_to_location = {}
+class Range:
+    def __init__(self, f: int, t: int, c: int) -> None:
+        self.f=f
+        self.t=t
+        self.c=c
+    def translate(self, n: int) -> Union[int, None]:
+        if n >= self.f and n < self.f+self.c:
+            return n-self.f+self.t
+        return None
+
+seed_to_soil = []
+soil_to_fertilizer = []
+fertilizer_to_water = []
+water_to_light = []
+light_to_temperature = []
+temperature_to_humidity = []
+humidity_to_location = []
 
 maps = {
     "seed-to-soil map:": seed_to_soil,
@@ -27,27 +37,14 @@ def handle_part(part: List[str]):
         part = part[1:]
         for line in part:
             aid, bid, count = map(int, line.split(" "))
-            for i, j in zip(range(aid, aid+count), range(bid, bid+count)):
-                currentmap[j] = i
+            currentmap.append(Range(bid, aid, count))
             
-
-
-with open("input.txt") as f:
-    lines = f.readlines()
-    part = []
-    for l in lines:
-        l = l.strip()
-        if l == "":
-            handle_part(part)
-            part.clear()
-        else:
-            part.append(l.strip())
-    handle_part(part)
-
-def get_map_connection(currentmap, a):
-    if a in currentmap:
-        return currentmap[a]
-    return a
+def resolve(map: List[Range], n: int) -> int:
+    for m in map:
+        v = m.translate(n)
+        if v is not None:
+            return v
+    return n
 
 def get_whole_chain(a):
     ms = [
@@ -60,7 +57,19 @@ def get_whole_chain(a):
         humidity_to_location
     ]
     for m in ms:
-        a = get_map_connection(m, a)
+        a = resolve(m, a)
     return a
+
+with open("input.txt") as f:
+    lines = f.readlines()
+    part = []
+    for l in lines:
+        l = l.strip()
+        if l == "":
+            handle_part(part)
+            part.clear()
+        else:
+            part.append(l.strip())
+    handle_part(part)
 
 print(min([get_whole_chain(a) for a in required_seeds]))
