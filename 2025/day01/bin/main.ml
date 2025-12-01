@@ -24,4 +24,35 @@ in
 List.iter bod ic
 ;;
 
-print_int !count_part1
+print_string "Part 2";
+print_newline ();
+
+currentNumber := 50
+
+let count_part2 = ref 0;;
+
+let bod = function
+  | s when String.starts_with ~prefix:"L" s ->
+      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
+      for _ = 0 to n - 1 do
+        (currentNumber :=
+           let v = !currentNumber - 1 in
+           if v < 0 then v + 100 else v);
+        if !currentNumber == 0 then count_part2 := !count_part2 + 1
+      done
+  | s when String.starts_with ~prefix:"R" s ->
+      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
+      for _ = 0 to n - 1 do
+        (currentNumber :=
+           let v = !currentNumber + 1 in
+           if v >= 100 then v - 100 else v);
+        if !currentNumber == 0 then count_part2 := !count_part2 + 1
+      done
+  | _ -> raise Invalid_format
+in
+List.iter bod ic
+;;
+
+print_int !count_part1;
+print_newline ();
+print_int !count_part2
