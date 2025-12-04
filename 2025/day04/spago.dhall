@@ -14,16 +14,16 @@ to generate this file without the comments in this block.
 , dependencies =
   [ "arrays"
   , "console"
-  , "control"
   , "effect"
+  , "enums"
   , "foldable-traversable"
-  , "lists"
   , "maybe"
   , "node-buffer"
   , "node-fs"
   , "partial"
   , "prelude"
   , "strings"
+  , "tuples"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs" ]
