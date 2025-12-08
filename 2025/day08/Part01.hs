@@ -26,7 +26,7 @@ main = do
         ([x1, y1, z1], i :: Int) <- zip boxes [0 ..]
         ([x2, y2, z2], j :: Int) <- drop (i + 1) (zip boxes [0 ..])
         return ((i, j), ((x1 - x2) ^ 2 + (y1 - y2) ^ 2 + (z1 - z2) ^ 2) :: Int)
-  let circuits = zipWith (\_ x -> x) boxes [1 :: Int ..]
+  let circuits = zipWith (const id) boxes [1 :: Int ..]
   let circuits' =
         foldl
           ( \prevCirc (node1, node2) ->

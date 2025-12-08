@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Data.Bifunctor (Bifunctor (second))
-import Data.List (nub, sort, sortBy, sortOn)
+import Data.List (find, nub, sort, sortBy, sortOn)
 import Data.Map (Map, alter, empty, toList)
 import Data.Maybe (isJust)
 import Data.Ord (Down (Down), comparing)
@@ -31,15 +31,14 @@ main = do
         ([x2, y2, z2], j :: Int) <- drop (i + 1) (zip boxes [0 ..])
         return ((i, j), ((x1 - x2) ^ 2 + (y1 - y2) ^ 2 + (z1 - z2) ^ 2) :: Int)
   let circuits = zipWith (const id) boxes [1 :: Int ..]
-  let circuits' =
-        head $
-          dropWhile (not . allSame . snd) $
-            scanl
-              ( \(_, prevCirc) (node1, node2) ->
-                  let (id1, id2) = (prevCirc !! node1, prevCirc !! node2)
-                   in ((node1, node2), map (\id -> if id == id2 then id1 else id) prevCirc)
-              )
-              ((0, 0), circuits)
-              distances
+  let (Just circuits') =
+        find (allSame . snd) $
+          scanl
+            ( \(_, prevCirc) (node1, node2) ->
+                let (id1, id2) = (prevCirc !! node1, prevCirc !! node2)
+                 in ((node1, node2), map (\id -> if id == id2 then id1 else id) prevCirc)
+            )
+            ((0, 0), circuits)
+            distances
   let ((node1, node2), _) = circuits'
   print $ head (boxes !! node1) * head (boxes !! node2)
