@@ -9,6 +9,7 @@ import Data.Maybe (fromJust, listToMaybe)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Text.Read qualified as TR
+import Debug.Trace (traceShow, traceShowId)
 
 data Shape = Shape (Int, Int) [[Bool]] deriving (Eq)
 
@@ -28,7 +29,7 @@ newShape xs = do
   return $ Shape (width, height) xs
 
 instance Show Shape where
-  show (Shape _ xs) = intercalate "\n" (map (map $ \v -> if v then '#' else '.') xs)
+  show (Shape _ xs) = intercalate "\n" (map (map $ \v -> if v then '#' else '.') xs) ++ "\n"
 
 data Row = Row (Int, Int) [Int] deriving (Show)
 
@@ -59,6 +60,9 @@ applyAt n f (x : xs) = x : applyAt (n - 1) f xs
 
 setAt :: Int -> a -> [a] -> [a]
 setAt n x' = applyAt n (const x')
+
+setAt2 :: (Int, Int) -> a -> [[a]] -> [[a]]
+setAt2 (x, y) e = applyAt y (setAt x e)
 
 ---- End of standard library wishlist
 
@@ -98,26 +102,47 @@ findPositions board shape = do
   let Shape _ shapeList = shape
   let common = map (drop x) $ drop y boardList
   let common' = all (all (\(a, b) -> not $ a && b)) (zipWith zip common shapeList)
-  return (x, y)
+  guard common'
+  return $ (x, y)
+
+-- fillShape board (x, y) shape
+fillShape :: Shape -> (Int, Int) -> Shape -> Shape
+-- [ ((Int, Int), Bool) ]
+fillShape (Shape (w, h) board) (x, y) (Shape _ shape) = traceShowId $ Shape (w, h) $ foldr (uncurry setAt2) board $ filter snd $ concat helper
+  where
+    helper :: [[((Int, Int), Bool)]]
+    helper = zipWith (\row yidx -> zipWith (\v xidx -> ((xidx, yidx), v)) row [x ..]) shape [y ..]
 
 -- fitAll :: Shape -> [[Shape]] -> [[(Int, Int)]]
-fitAll :: Shape -> [[Shape]] -> _
-fitAll board _ = []
+fitAll :: Shape -> [[Shape]] -> [[(Int, Int)]]
+fitAll board [] = [[]]
 fitAll board (shape : shapes) = do
   shapeVariant <- shape
-  positions <- findPositions board shapeVariant
-  let board' = _
-  return positions
+  position <- findPositions board shapeVariant
+  let board' = fillShape board position shapeVariant
+  otherBoard <- fitAll board' shapes
+  return $ position : otherBoard
+
+emptyBoard :: (Int, Int) -> Shape
+emptyBoard (w, h) = fromJust $ newShape $ replicate h $ replicate w False
+
+fitAll4Row :: [Shape] -> Row -> [[(Int, Int)]]
+fitAll4Row shapes (Row size counts) = fitAll board replicatedShapes
+  where
+    board = emptyBoard size
+    transformedShapes = map (\shape -> nub $ map ($ shape) transforms) shapes
+    replicatedShapes = concatMap (\(variant, counts) -> replicate counts variant) $ zip transformedShapes counts
 
 main = do
   (shapes, rows) <- unfoldr' parseShape . T.lines <$> TIO.readFile "input.txt"
   let Right rows' = mapM parseRow rows
-  let exampleShape = head shapes
-  let Row size _ = head rows'
-  print (exampleShape, size)
-  let exampleVariants = nub $ map ($ exampleShape) transforms
-  print $ fitAll (fromJust $ newShape $ replicate (snd size) $ replicate (fst size) False) (replicate 3 exampleVariants)
+  let results = map (fitAll4Row shapes) rows'
+  print (map null results)
 
 -- forM_ (nub $ map ($ exampleShape) transforms) $ \v -> do
 --   print v
 --   putStrLn ""
+
+myShape = (Shape (2, 3) [[True, True], [True, False], [True, False]])
+
+t = fillShape (emptyBoard (5, 5)) (1, 2) myShape
