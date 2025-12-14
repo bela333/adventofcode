@@ -3,13 +3,16 @@
 
 {- HLINT ignore "Use lambda-case" -}
 
-import Control.Monad (forM, forM_, guard)
+import Control.Monad (forM, forM_, guard, replicateM, void)
 import Data.List
 import Data.Maybe (fromJust, listToMaybe)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Text.Read qualified as TR
+import Data.Traversable (for)
 import Debug.Trace (traceShow, traceShowId)
+import Logic
+import System.Environment (getArgs)
 
 data Shape = Shape (Int, Int) [[Bool]] deriving (Eq)
 
@@ -32,6 +35,9 @@ instance Show Shape where
   show (Shape _ xs) = intercalate "\n" (map (map $ \v -> if v then '#' else '.') xs) ++ "\n"
 
 data Row = Row (Int, Int) [Int] deriving (Show)
+
+getCounts :: Row -> [Int]
+getCounts (Row _ c) = c
 
 ---- Standard library wishlist
 
@@ -93,56 +99,50 @@ transforms =
     transposeShape . rotate90 . rotate90 . rotate90
   ]
 
--- findPositions (width, height) board shape
-findPositions :: Shape -> Shape -> _
-findPositions board shape = do
-  x <- [0 .. width board - width shape]
-  y <- [0 .. height board - height shape]
-  let Shape _ boardList = board
-  let Shape _ shapeList = shape
-  let common = map (drop x) $ drop y boardList
-  let common' = all (all (\(a, b) -> not $ a && b)) (zipWith zip common shapeList)
-  guard common'
-  return $ (x, y)
-
 -- fillShape board (x, y) shape
 fillShape :: Shape -> (Int, Int) -> Shape -> Shape
--- [ ((Int, Int), Bool) ]
-fillShape (Shape (w, h) board) (x, y) (Shape _ shape) = traceShowId $ Shape (w, h) $ foldr (uncurry setAt2) board $ filter snd $ concat helper
+fillShape (Shape (w, h) board) (x, y) (Shape _ shape) = Shape (w, h) $ foldr (uncurry setAt2) board $ filter snd $ concat helper
   where
     helper :: [[((Int, Int), Bool)]]
     helper = zipWith (\row yidx -> zipWith (\v xidx -> ((xidx, yidx), v)) row [x ..]) shape [y ..]
 
--- fitAll :: Shape -> [[Shape]] -> [[(Int, Int)]]
-fitAll :: Shape -> [[Shape]] -> [[(Int, Int)]]
-fitAll board [] = [[]]
-fitAll board (shape : shapes) = do
-  shapeVariant <- shape
-  position <- findPositions board shapeVariant
-  let board' = fillShape board position shapeVariant
-  otherBoard <- fitAll board' shapes
-  return $ position : otherBoard
-
 emptyBoard :: (Int, Int) -> Shape
 emptyBoard (w, h) = fromJust $ newShape $ replicate h $ replicate w False
 
-fitAll4Row :: [Shape] -> Row -> [[(Int, Int)]]
-fitAll4Row shapes (Row size counts) = fitAll board replicatedShapes
-  where
-    board = emptyBoard size
-    transformedShapes = map (\shape -> nub $ map ($ shape) transforms) shapes
-    replicatedShapes = concatMap (\(variant, counts) -> replicate counts variant) $ zip transformedShapes counts
+shapeToCNFM :: (Int, Int) -> Shape -> CNFM [[Var]]
+shapeToCNFM (w, h) shape = do
+  let initialboard = emptyBoard (w, h)
+  boardVars <- replicateM h (replicateM w newVar)
+  let boards :: [Shape] = do
+        variant <- map ($ shape) transforms
+        x <- [0 .. width initialboard - width variant]
+        y <- [0 .. height initialboard - height variant]
+        return $ fillShape initialboard (x, y) variant
+  let dnf :: [[Lit]] = map (\(Shape _ board) -> map (\(b, v) -> toggleLit (not b) (Pos v)) $ concat $ zipWith zip board boardVars) boards
+  cnf <- mapM andLit dnf
+  constrain cnf
+  return boardVars
+
+rowToCNFM :: Row -> [Shape] -> CNFM _
+rowToCNFM (Row size counts) shapes = do
+  let requiredShapes = concatMap (uncurry replicate) (zip counts shapes)
+  shapeBoards <- forM requiredShapes $ shapeToCNFM size
+  forM_ [0 .. snd size - 1] $ \y -> do
+    forM_ [0 .. fst size - 1] $ \x -> do
+      let vars = map (\e -> (e !! y) !! x) shapeBoards
+      atmostOne $ map Pos vars
+  return shapeBoards
 
 main = do
+  [n'] <- getArgs
+  let n :: Int = read n'
   (shapes, rows) <- unfoldr' parseShape . T.lines <$> TIO.readFile "input.txt"
   let Right rows' = mapM parseRow rows
-  let results = map (fitAll4Row shapes) rows'
-  print (map null results)
+  let row = rows' !! n
+  let cnfm = rowToCNFM row shapes
+  TIO.putStrLn $ cnfmToDimacs $ void $ rowToCNFM row shapes
+  return ()
 
--- forM_ (nub $ map ($ exampleShape) transforms) $ \v -> do
---   print v
---   putStrLn ""
-
-myShape = (Shape (2, 3) [[True, True], [True, False], [True, False]])
-
-t = fillShape (emptyBoard (5, 5)) (1, 2) myShape
+-- forM (zip rows' [1 ..]) $ \(row, i) -> do
+--   let cnfm = rowToCNFM row shapes
+--   TIO.writeFile ("row" ++ show i ++ ".dimacs") $ cnfmToDimacs $ void $ rowToCNFM row shapes
