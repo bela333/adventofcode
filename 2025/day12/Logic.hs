@@ -3,7 +3,6 @@
 module Logic where
 
 import Control.Monad (ap, forM, forM_, liftM, replicateM)
-import Data.Set qualified as S
 import Data.Text qualified as T
 import Text.Printf (printf)
 
@@ -13,7 +12,7 @@ data Lit = Pos Var | Neg Var deriving (Eq, Ord, Show)
 
 type Clause = [Lit]
 
-type CNF = S.Set Clause
+type CNF = [Clause]
 
 newtype CNFM a = CNFM {runCNFM :: Int -> (Int, CNF, a)}
 
@@ -21,20 +20,20 @@ instance Monad CNFM where
   (CNFM a) >>= bf = CNFM $ \varcounter ->
     let (varcounter', cnf1, aret) = a varcounter
      in case runCNFM (bf aret) varcounter' of
-          (varcounter'', cnf2, bret) -> (varcounter'', cnf1 `S.union` cnf2, bret)
+          (varcounter'', cnf2, bret) -> (varcounter'', cnf1 ++ cnf2, bret)
 
 instance Applicative CNFM where
-  pure x = CNFM {runCNFM = (,S.empty,x)}
+  pure x = CNFM {runCNFM = (,[],x)}
   (<*>) = ap
 
 instance Functor CNFM where
   fmap = liftM
 
 newVar :: CNFM Var
-newVar = CNFM $ \varcounter -> (varcounter + 1, S.empty, Var varcounter)
+newVar = CNFM $ \varcounter -> (varcounter + 1, [], Var varcounter)
 
 constrain :: Clause -> CNFM ()
-constrain clause = CNFM (,S.singleton clause,())
+constrain clause = CNFM (,[clause],())
 
 implies :: Lit -> Lit -> Clause
 implies a b = [negateLit a, b]
@@ -76,11 +75,11 @@ literalToDimacs (Neg (Var n)) = T.pack $ show (-(n + 1))
 clauseToDimacs :: Clause -> T.Text
 clauseToDimacs clause = T.intercalate " " $ map literalToDimacs clause ++ ["0"]
 
-cnfmToDimacs :: CNFM () -> T.Text
-cnfmToDimacs cnfm = T.intercalate "\n" $ T.pack (printf "p cnf %d %d" varcounter clausecounter) : map clauseToDimacs (S.toList clauses)
+cnfmToDimacs :: CNFM () -> [T.Text]
+cnfmToDimacs cnfm = map clauseToDimacs clauses
   where
     (varcounter, clauses, ()) = runCNFM cnfm 0
-    clausecounter = S.size clauses
+    clausecounter = length clauses
 
 toggleLit :: Bool -> Lit -> Lit
 toggleLit False = id

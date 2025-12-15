@@ -118,7 +118,7 @@ shapeToCNFM (w, h) shape = do
         x <- [0 .. width initialboard - width variant]
         y <- [0 .. height initialboard - height variant]
         return $ fillShape initialboard (x, y) variant
-  let dnf :: [[Lit]] = map (\(Shape _ board) -> map (\(b, v) -> toggleLit (not b) (Pos v)) $ concat $ zipWith zip board boardVars) boards
+  let dnf :: [[Lit]] = map (\(Shape _ board) -> map (Pos . snd) $ concatMap (filter fst) (zipWith zip board boardVars)) boards
   cnf <- mapM andLit dnf
   constrain cnf
   return boardVars
@@ -126,7 +126,7 @@ shapeToCNFM (w, h) shape = do
 rowToCNFM :: Row -> [Shape] -> CNFM _
 rowToCNFM (Row size counts) shapes = do
   let requiredShapes = concatMap (uncurry replicate) (zip counts shapes)
-  shapeBoards <- forM requiredShapes $ shapeToCNFM size
+  shapeBoards <- mapM (shapeToCNFM size) requiredShapes
   forM_ [0 .. snd size - 1] $ \y -> do
     forM_ [0 .. fst size - 1] $ \x -> do
       let vars = map (\e -> (e !! y) !! x) shapeBoards
@@ -140,7 +140,8 @@ main = do
   let Right rows' = mapM parseRow rows
   let row = rows' !! n
   let cnfm = rowToCNFM row shapes
-  TIO.putStrLn $ cnfmToDimacs $ void $ rowToCNFM row shapes
+  let dimacs = cnfmToDimacs (void $ rowToCNFM row shapes)
+  mapM TIO.putStrLn dimacs
   return ()
 
 -- forM (zip rows' [1 ..]) $ \(row, i) -> do
