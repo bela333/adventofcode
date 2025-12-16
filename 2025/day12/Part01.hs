@@ -99,51 +99,10 @@ transforms =
     transposeShape . rotate90 . rotate90 . rotate90
   ]
 
--- fillShape board (x, y) shape
-fillShape :: Shape -> (Int, Int) -> Shape -> Shape
-fillShape (Shape (w, h) board) (x, y) (Shape _ shape) = Shape (w, h) $ foldr (uncurry setAt2) board $ filter snd $ concat helper
-  where
-    helper :: [[((Int, Int), Bool)]]
-    helper = zipWith (\row yidx -> zipWith (\v xidx -> ((xidx, yidx), v)) row [x ..]) shape [y ..]
-
-emptyBoard :: (Int, Int) -> Shape
-emptyBoard (w, h) = fromJust $ newShape $ replicate h $ replicate w False
-
-shapeToCNFM :: (Int, Int) -> Shape -> CNFM [[Var]]
-shapeToCNFM (w, h) shape = do
-  let initialboard = emptyBoard (w, h)
-  boardVars <- replicateM h (replicateM w newVar)
-  let boards :: [Shape] = do
-        variant <- map ($ shape) transforms
-        x <- [0 .. width initialboard - width variant]
-        y <- [0 .. height initialboard - height variant]
-        return $ fillShape initialboard (x, y) variant
-  let dnf :: [[Lit]] = map (\(Shape _ board) -> map (Pos . snd) $ concatMap (filter fst) (zipWith zip board boardVars)) boards
-  cnf <- mapM andLit dnf
-  constrain cnf
-  return boardVars
-
-rowToCNFM :: Row -> [Shape] -> CNFM _
-rowToCNFM (Row size counts) shapes = do
-  let requiredShapes = concatMap (uncurry replicate) (zip counts shapes)
-  shapeBoards <- mapM (shapeToCNFM size) requiredShapes
-  forM_ [0 .. snd size - 1] $ \y -> do
-    forM_ [0 .. fst size - 1] $ \x -> do
-      let vars = map (\e -> (e !! y) !! x) shapeBoards
-      atmostOne $ map Pos vars
-  return shapeBoards
+isRowFeasible :: [Shape] -> Row -> _
+isRowFeasible shapes (Row (w, h) counts) = sum (map (\(Shape _ shape) -> length $ concatMap (filter id) shape) $ concatMap (uncurry replicate) $ zip counts shapes) < w * h
 
 main = do
-  [n'] <- getArgs
-  let n :: Int = read n'
   (shapes, rows) <- unfoldr' parseShape . T.lines <$> TIO.readFile "input.txt"
   let Right rows' = mapM parseRow rows
-  let row = rows' !! n
-  let cnfm = rowToCNFM row shapes
-  let dimacs = cnfmToDimacs (void $ rowToCNFM row shapes)
-  mapM TIO.putStrLn dimacs
-  return ()
-
--- forM (zip rows' [1 ..]) $ \(row, i) -> do
---   let cnfm = rowToCNFM row shapes
---   TIO.writeFile ("row" ++ show i ++ ".dimacs") $ cnfmToDimacs $ void $ rowToCNFM row shapes
+  print $ length $ filter (isRowFeasible shapes) rows'
